@@ -1,0 +1,25 @@
+# --- Node.js (app/) ---
+node_modules/
+npm-debug.log*
+.env
+.env.*
+
+# --- Terraform (modules/, environments/) ---
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
+# --- Kubernetes / Helm ---
+*.tgz
+charts/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

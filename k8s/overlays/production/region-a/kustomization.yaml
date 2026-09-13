@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sample-app
+
+resources:
+  - ../../../base
+  - ../../../base/hpa.yaml
+
+nameSuffix: ""
+
+# Production image: pin to a real tag at deploy time, e.g. via:
+#   kustomize edit set image sample-app=<ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/sample-app:<TAG>
+images:
+  - name: sample-app
+    newName: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/sample-app
+    newTag: latest
+
+replicas:
+  - name: sample-app
+    count: 3
+
+patches:
+  - path: patch-region.yaml
+    target:
+      kind: Deployment
+      name: sample-app
+
+configMapGenerator: []
+
+commonLabels:
+  environment: production
+  region: us-east-1

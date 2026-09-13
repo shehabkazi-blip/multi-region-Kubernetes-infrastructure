@@ -1,0 +1,236 @@
+name: On-Demand Provision, Test & Destroy
+
+# Manually triggered from the Actions tab. Provisions the chosen region(s)
+# with Terraform, deploys the sample app, runs a health check, then tears
+# everything down automatically — so nothing is left running (and billing)
+# unless something goes wrong or you explicitly opt out of the destroy step.
+on:
+  workflow_dispatch:
+    inputs:
+      target_region:
+        description: "Which environment(s) to provision"
+        required: true
+        type: choice
+        options:
+          - region-a
+          - region-b
+          - both
+        default: region-a
+      skip_destroy:
+        description: "Skip the automatic destroy at the end (leave infra running for debugging)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write   # required for OIDC -> AWS role assumption
+  contents: read
+
+concurrency:
+  # Prevent two runs from touching the same Terraform state at once.
+  group: ondemand-${{ inputs.target_region }}
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: "1.9.5"
+  # Maps each environments/<dir> to its real AWS region and EKS cluster name.
+  # Adjust cluster names to match your modules/eks output / naming convention.
+  REGION_A_AWS_REGION: us-east-1
+  REGION_B_AWS_REGION: eu-west-1
+  REGION_A_CLUSTER_NAME: region-a-eks
+  REGION_B_CLUSTER_NAME: region-b-eks
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Compute which environments/ directories to run against based on the
+  # workflow_dispatch input, so the rest of the pipeline can use a matrix.
+  # ---------------------------------------------------------------------
+  prepare-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      regions: ${{ steps.set-matrix.outputs.regions }}
+    steps:
+      - id: set-matrix
+        run: |
+          if [ "${{ inputs.target_region }}" = "both" ]; then
+            echo 'regions=["region-a","region-b"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'regions=["${{ inputs.target_region }}"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------
+  # Provision infra with Terraform, then deploy + smoke-test the sample app
+  # ---------------------------------------------------------------------
+  provision-and-test:
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        region: ${{ fromJson(needs.prepare-matrix.outputs.regions) }}
+    outputs:
+      region_a_result: ${{ steps.summarize.outputs.result }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve region variables
+        id: vars
+        run: |
+          if [ "${{ matrix.region }}" = "region-a" ]; then
+            echo "aws_region=${{ env.REGION_A_AWS_REGION }}" >> "$GITHUB_OUTPUT"
+            echo "cluster_name=${{ env.REGION_A_CLUSTER_NAME }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "aws_region=${{ env.REGION_B_AWS_REGION }}" >> "$GITHUB_OUTPUT"
+            echo "cluster_name=${{ env.REGION_B_CLUSTER_NAME }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ steps.vars.outputs.aws_region }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform init
+        working-directory: environments/${{ matrix.region }}
+        run: terraform init -input=false
+
+      - name: Terraform apply
+        working-directory: environments/${{ matrix.region }}
+        run: terraform apply -auto-approve -input=false
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ steps.vars.outputs.cluster_name }}" \
+            --region "${{ steps.vars.outputs.aws_region }}" \
+            --alias "${{ matrix.region }}"
+
+      - name: Deploy sample app
+        run: |
+          kubectl --context "${{ matrix.region }}" \
+            apply -k "k8s/overlays/production/${{ matrix.region }}"
+
+      - name: Wait for rollout
+        run: |
+          kubectl --context "${{ matrix.region }}" \
+            -n sample-app rollout status deployment/sample-app --timeout=180s
+
+      - name: Health check via ALB
+        id: healthcheck
+        run: |
+          set -e
+          HOSTNAME=""
+          for i in $(seq 1 20); do
+            HOSTNAME=$(kubectl --context "${{ matrix.region }}" -n sample-app \
+              get ingress sample-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || true)
+            if [ -n "$HOSTNAME" ]; then break; fi
+            echo "Waiting for ALB hostname... ($i/20)"
+            sleep 15
+          done
+
+          if [ -z "$HOSTNAME" ]; then
+            echo "::error::ALB hostname never became available"
+            exit 1
+          fi
+
+          echo "Testing http://$HOSTNAME/healthz"
+          for i in $(seq 1 10); do
+            if curl -sf "http://$HOSTNAME/healthz" > /dev/null; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Retrying health check... ($i/10)"
+            sleep 10
+          done
+
+          echo "::error::Health check failed after retries"
+          exit 1
+
+      - name: Record result
+        id: summarize
+        if: always()
+        run: |
+          echo "region=${{ matrix.region }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "outcome=${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------
+  # Always runs (even if provisioning/testing failed) unless the user
+  # explicitly checked "skip_destroy" — this is the safety net that keeps
+  # you from leaving billable infra running by accident.
+  # ---------------------------------------------------------------------
+  destroy:
+    needs: [prepare-matrix, provision-and-test]
+    if: ${{ always() && inputs.skip_destroy == false }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        region: ${{ fromJson(needs.prepare-matrix.outputs.regions) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve region variables
+        id: vars
+        run: |
+          if [ "${{ matrix.region }}" = "region-a" ]; then
+            echo "aws_region=${{ env.REGION_A_AWS_REGION }}" >> "$GITHUB_OUTPUT"
+            echo "cluster_name=${{ env.REGION_A_CLUSTER_NAME }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "aws_region=${{ env.REGION_B_AWS_REGION }}" >> "$GITHUB_OUTPUT"
+            echo "cluster_name=${{ env.REGION_B_CLUSTER_NAME }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ steps.vars.outputs.aws_region }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Update kubeconfig
+        continue-on-error: true # cluster may already be gone/unreachable — don't block cleanup on this
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ steps.vars.outputs.cluster_name }}" \
+            --region "${{ steps.vars.outputs.aws_region }}" \
+            --alias "${{ matrix.region }}" || true
+
+      - name: Delete app + Ingress (release the ALB and its ENIs)
+        continue-on-error: true
+        run: |
+          # The AWS Load Balancer Controller provisions the ALB outside of
+          # Terraform state. If the Ingress isn't deleted first, the ALB's
+          # ENIs stay attached to the subnets and `terraform destroy` fails
+          # trying to delete the VPC — leaving half-destroyed infra running
+          # (and billing) instead of a clean teardown.
+          kubectl --context "${{ matrix.region }}" \
+            delete -k "k8s/overlays/production/${{ matrix.region }}" \
+            --ignore-not-found --wait=true --timeout=120s || true
+
+          echo "Waiting for the ALB to fully deprovision..."
+          sleep 45
+
+      - name: Terraform init
+        working-directory: environments/${{ matrix.region }}
+        run: terraform init -input=false
+
+      - name: Terraform destroy
+        working-directory: environments/${{ matrix.region }}
+        run: terraform destroy -auto-approve -input=false
+
+      - name: Destroy summary
+        if: always()
+        run: |
+          echo "### 🗑️ Destroyed ${{ matrix.region }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"

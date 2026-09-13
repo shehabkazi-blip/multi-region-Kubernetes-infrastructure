@@ -1,0 +1,29 @@
+# Strategic-merge patch applied on top of the base Deployment for
+# the Region B production overlay.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app
+spec:
+  template:
+    spec:
+      containers:
+        - name: sample-app
+          imagePullPolicy: Always
+          # NOTE: strategic-merge patches replace the whole `env` list (it has
+          # no merge key), so all env vars must be repeated here, not just
+          # the one being changed.
+          env:
+            - name: PORT
+              value: "8080"
+            - name: REGION
+              value: "eu-west-1"
+            - name: APP_VERSION
+              value: "1.0.0"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
