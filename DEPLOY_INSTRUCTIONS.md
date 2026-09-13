@@ -1,7 +1,7 @@
 # Deploying the Sample App to Region A and Region B EKS Clusters
 
 This assumes:
-- You have an ECR repository `sample-app` created in each region (or one central repo replicated via ECR cross-region replication).
+- You have an ECR repository `sample-app` created in each region (or One central repo replicated via ECR cross-region replication).
 - `aws-cli`, `docker`, `kubectl`, and `helm` are installed and configured.
 - Your kubeconfig can reach both clusters (via `aws eks update-kubeconfig`).
 - The AWS Load Balancer Controller is installed on both EKS clusters (required for the `ingress.yaml` / Helm ingress to provision an ALB).
