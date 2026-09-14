@@ -92,5 +92,8 @@ module "lb_controller" {
   vpc_id            = module.eks.vpc_id
   aws_region        = var.aws_region
 
-  depends_on = [module.eks]
+  depends_on = [
+    module.eks,
+    data.aws_eks_cluster_auth.this
+  ]
 }
