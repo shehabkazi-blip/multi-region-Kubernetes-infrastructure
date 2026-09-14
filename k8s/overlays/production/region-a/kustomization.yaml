@@ -5,7 +5,7 @@ namespace: sample-app
 
 resources:
   - ../../../base
-  - ../../../base/hpa.yaml
+  - ../../../base/hpa-addon
 
 nameSuffix: ""
 
