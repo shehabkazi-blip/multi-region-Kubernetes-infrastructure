@@ -9,7 +9,7 @@ resources:
 
 images:
   - name: sample-app
-    newName: <ACCOUNT_ID>.dkr.ecr.eu-west-1.amazonaws.com/sample-app
+    newName: 279849615230.dkr.ecr.eu-west-1.amazonaws.com/sample-app
     newTag: latest
 
 replicas:

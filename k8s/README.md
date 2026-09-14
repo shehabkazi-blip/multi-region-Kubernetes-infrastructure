@@ -39,12 +39,12 @@ template and adjust replica counts / resource sizing down.
 
 ## Before you deploy
 
-Replace `<ACCOUNT_ID>` in both overlay `kustomization.yaml` files with your
+Replace `279849615230` in both overlay `kustomization.yaml` files with your
 real AWS account ID, or set it at apply time:
 
 ```bash
 cd k8s/overlays/production/region-a
-kustomize edit set image sample-app=<ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/sample-app:<TAG>
+kustomize edit set image sample-app=279849615230.dkr.ecr.us-east-1.amazonaws.com/sample-app:<TAG>
 ```
 
 ## Preview and apply

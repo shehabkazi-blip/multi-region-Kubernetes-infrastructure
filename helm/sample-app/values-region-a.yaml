@@ -2,7 +2,7 @@
 region: "us-east-1"
 
 image:
-  repository: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/sample-app
+  repository: 279849615230.dkr.ecr.us-east-1.amazonaws.com/sample-app
   tag: "latest"
 
 # Add any region-specific tuning here, e.g. different replica counts,

@@ -10,10 +10,10 @@ resources:
 nameSuffix: ""
 
 # Production image: pin to a real tag at deploy time, e.g. via:
-#   kustomize edit set image sample-app=<ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/sample-app:<TAG>
+#   kustomize edit set image sample-app=279849615230.dkr.ecr.us-east-1.amazonaws.com/sample-app:<TAG>
 images:
   - name: sample-app
-    newName: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/sample-app
+    newName: 279849615230.dkr.ecr.us-east-1.amazonaws.com/sample-app
     newTag: latest
 
 replicas:
