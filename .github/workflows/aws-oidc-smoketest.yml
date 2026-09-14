@@ -1,0 +1,27 @@
+name: AWS OIDC Smoke Test
+
+# Quick sanity check: confirms GitHub Actions can assume the AWS role via
+# OIDC, WITHOUT touching Terraform or creating any billable resource.
+# Run this first whenever OIDC setup changes — takes ~15 seconds instead of
+# the ~20-30 minutes the full provision/destroy pipeline takes.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  whoami:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Confirm identity
+        run: |
+          echo "If you see an identity below, OIDC is working correctly."
+          aws sts get-caller-identity
