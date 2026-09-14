@@ -102,6 +102,8 @@ jobs:
 
       - name: Terraform apply
         working-directory: environments/${{ matrix.region }}
+        env:
+          TF_VAR_ci_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
         run: terraform apply -auto-approve -input=false
 
       - name: Update kubeconfig
@@ -243,6 +245,8 @@ jobs:
 
       - name: Terraform destroy
         working-directory: environments/${{ matrix.region }}
+        env:
+          TF_VAR_ci_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
         run: terraform destroy -auto-approve -input=false
 
       - name: Destroy summary

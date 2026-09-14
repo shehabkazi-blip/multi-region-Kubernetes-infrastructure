@@ -41,9 +41,47 @@ resource "aws_eks_cluster" "this" {
     endpoint_private_access = true
   }
 
+  # Explicit access mode + always grant the creating principal admin rights.
+  # Without this, whichever IAM identity happens to "create" the cluster gets
+  # an implicit, hard-to-reason-about grant that does not reliably carry over
+  # to future Terraform runs (e.g. a new GitHub Actions session) — the
+  # aws_eks_access_entry below gives a stable, explicit admin grant to
+  # var.additional_admin_role_arn regardless of who ran apply.
+  access_config {
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
+  }
+
   tags = var.tags
 
   depends_on = [aws_iam_role_policy_attachment.cluster_AmazonEKSClusterPolicy]
+}
+
+# -----------------------------------------------------------------------------
+# Explicitly grant a known IAM role (e.g. the CI/CD role running Terraform)
+# full cluster-admin access via the modern EKS Access Entries API. This is
+# independent of the "cluster creator" heuristic above, so CI stays able to
+# manage the cluster (via kubectl or Terraform's kubernetes/helm providers)
+# no matter which session originally created it.
+# -----------------------------------------------------------------------------
+resource "aws_eks_access_entry" "additional_admin" {
+  count         = var.additional_admin_role_arn != "" ? 1 : 0
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = var.additional_admin_role_arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "additional_admin" {
+  count         = var.additional_admin_role_arn != "" ? 1 : 0
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = var.additional_admin_role_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.additional_admin]
 }
 
 # -----------------------------------------------------------------------------
@@ -107,7 +145,6 @@ resource "aws_eks_node_group" "this" {
 
   instance_types = var.node_instance_types
   capacity_type  = var.node_capacity_type
-  ami_type       = "AL2023_x86_64_STANDARD"
 
   scaling_config {
     desired_size = var.node_desired_size

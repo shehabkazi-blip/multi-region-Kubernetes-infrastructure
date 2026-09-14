@@ -60,3 +60,9 @@ variable "tags" {
     Region      = "region-a"
   }
 }
+
+variable "ci_role_arn" {
+  description = "IAM role ARN running Terraform (e.g. the GitHub Actions OIDC role) — granted explicit EKS cluster-admin access so it can always manage the cluster regardless of which session originally created it."
+  type        = string
+  default     = ""
+}
