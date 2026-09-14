@@ -1,5 +1,6 @@
 apiVersion: apps/v1
 kind: Deployment
+kind: Deployment
 metadata:
   name: sample-app
   namespace: sample-app
@@ -15,6 +16,8 @@ spec:
       labels:
         app: sample-app
     spec:
+      securityContext:
+        fsGroup: 1000
       containers:
         - name: sample-app
           # image name/tag is set by each overlay via the `images:` transformer
@@ -50,7 +53,6 @@ spec:
             periodSeconds: 15
           securityContext:
             runAsNonRoot: true
+            runAsUser: 1000
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-      securityContext:
-        fsGroup: 1000

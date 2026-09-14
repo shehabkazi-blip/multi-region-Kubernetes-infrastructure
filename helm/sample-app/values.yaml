@@ -52,6 +52,14 @@ probes:
     initialDelaySeconds: 10
     periodSeconds: 15
 
+securityContext:
+  enabled: true
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
