@@ -68,8 +68,4 @@ variable "additional_admin_role_arn" {
   default     = ""
 }
 
-variable "additional_admin_role_arn" {
-  description = "IAM role ARN (e.g. the CI/CD role running Terraform) to explicitly grant EKS cluster-admin access via an Access Entry. Leave empty to skip."
-  type        = string
-  default     = ""
-}
+
