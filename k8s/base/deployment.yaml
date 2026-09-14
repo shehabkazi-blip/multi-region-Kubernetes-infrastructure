@@ -1,6 +1,5 @@
 apiVersion: apps/v1
 kind: Deployment
-kind: Deployment
 metadata:
   name: sample-app
   namespace: sample-app
@@ -20,7 +19,6 @@ spec:
         fsGroup: 1000
       containers:
         - name: sample-app
-          # image name/tag is set by each overlay via the `images:` transformer
           image: sample-app:latest
           imagePullPolicy: IfNotPresent
           ports:
