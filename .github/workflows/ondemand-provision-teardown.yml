@@ -121,6 +121,22 @@ jobs:
           kubectl --context "${{ matrix.region }}" \
             -n sample-app rollout status deployment/sample-app --timeout=180s
 
+      - name: Debug pod/node status (only runs if rollout failed)
+        if: failure()
+        continue-on-error: true
+        run: |
+          echo "### Nodes ###"
+          kubectl --context "${{ matrix.region }}" get nodes -o wide
+
+          echo "### Pods in sample-app ###"
+          kubectl --context "${{ matrix.region }}" -n sample-app get pods -o wide
+
+          echo "### Pod descriptions (events, image pull status, probe failures) ###"
+          kubectl --context "${{ matrix.region }}" -n sample-app describe pods
+
+          echo "### Namespace events, most recent last ###"
+          kubectl --context "${{ matrix.region }}" -n sample-app get events --sort-by=.lastTimestamp
+
       - name: Health check via ALB
         id: healthcheck
         run: |
