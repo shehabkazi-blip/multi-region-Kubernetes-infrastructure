@@ -7,18 +7,18 @@ data "aws_iam_policy_document" "lb_controller_assume_role" {
       type        = "Federated"
       identifiers = [var.oidc_provider_arn]
     }
-  }
 
-  condition {
-    test     = "StringEquals"
-    variable = "${var.oidc_provider_url}:sub"
-    values   = ["system:serviceaccount:${var.namespace}:${var.service_account_name}"]
-  }
+    condition {
+      test     = "StringEquals"
+      variable = "${var.oidc_provider_url}:sub"
+      values   = ["system:serviceaccount:${var.namespace}:${var.service_account_name}"]
+    }
 
-  condition {
-    test     = "StringEquals"
-    variable = "${var.oidc_provider_url}:aud"
-    values   = ["sts.amazonaws.com"]
+    condition {
+      test     = "StringEquals"
+      variable = "${var.oidc_provider_url}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
   }
 }
 
