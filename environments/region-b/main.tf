@@ -18,6 +18,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.9"
+    }
   }
 }
 
@@ -52,8 +56,17 @@ module "eks" {
   tags                = var.tags
 }
 
+# -----------------------------------------------------------------------------
+# Time Sleep to allow EKS cluster authentication to stabilize
+# -----------------------------------------------------------------------------
+resource "time_sleep" "wait_for_eks" {
+  depends_on      = [module.eks]
+  create_duration = "40s"
+}
+
 data "aws_eks_cluster_auth" "this" {
-  name = module.eks.cluster_name
+  name       = module.eks.cluster_name
+  depends_on = [time_sleep.wait_for_eks]
 }
 
 provider "kubernetes" {
@@ -79,5 +92,9 @@ module "lb_controller" {
   vpc_id            = module.eks.vpc_id
   aws_region        = var.aws_region
 
-  depends_on = [module.eks]
+  depends_on = [
+    module.eks,
+    time_sleep.wait_for_eks,
+    data.aws_eks_cluster_auth.this
+  ]
 }
