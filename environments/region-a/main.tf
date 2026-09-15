@@ -18,6 +18,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.9"
+    }
   }
 }
 
@@ -46,24 +50,33 @@ module "vpc" {
 module "eks" {
   source = "../../modules/eks"
 
-  cluster_name         = var.cluster_name
-  cluster_version      = var.cluster_version
-  vpc_id               = module.vpc.vpc_id
-  private_subnet_ids   = module.vpc.private_subnet_ids
-  public_subnet_ids    = module.vpc.public_subnet_ids
-  node_instance_types  = var.node_instance_types
-  node_desired_size    = var.node_desired_size
-  node_min_size        = var.node_min_size
-  node_max_size        = var.node_max_size
-  tags                 = var.tags
+  cluster_name              = var.cluster_name
+  cluster_version           = var.cluster_version
+  vpc_id                    = module.vpc.vpc_id
+  private_subnet_ids        = module.vpc.private_subnet_ids
+  public_subnet_ids         = module.vpc.public_subnet_ids
+  node_instance_types       = var.node_instance_types
+  node_desired_size         = var.node_desired_size
+  node_min_size             = var.node_min_size
+  node_max_size             = var.node_max_size
+  tags                      = var.tags
   additional_admin_role_arn = var.ci_role_arn
+}
+
+# -----------------------------------------------------------------------------
+# Time Sleep to allow EKS cluster authentication to stabilize
+# -----------------------------------------------------------------------------
+resource "time_sleep" "wait_for_eks" {
+  depends_on      = [module.eks]
+  create_duration = "40s"
 }
 
 # -----------------------------------------------------------------------------
 # kubernetes / helm providers — authenticate to the cluster we just created
 # -----------------------------------------------------------------------------
 data "aws_eks_cluster_auth" "this" {
-  name = module.eks.cluster_name
+  name       = module.eks.cluster_name
+  depends_on = [time_sleep.wait_for_eks]
 }
 
 provider "kubernetes" {
@@ -94,6 +107,7 @@ module "lb_controller" {
 
   depends_on = [
     module.eks,
+    time_sleep.wait_for_eks,
     data.aws_eks_cluster_auth.this
   ]
 }
